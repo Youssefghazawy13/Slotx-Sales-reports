@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 import zipfile
 from io import BytesIO
 
@@ -10,6 +11,24 @@ st.set_page_config(
     page_icon="📊",
     layout="centered"
 )
+
+def auto_fit_columns(ws):
+    """Auto-fit all columns in the worksheet based on content"""
+    for column in ws.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        
+        for cell in column:
+            try:
+                if cell.value:
+                    cell_length = len(str(cell.value))
+                    if cell_length > max_length: 
+                        max_length = cell_length
+            except:
+                pass
+        
+        adjusted_width = min(max_length + 2, 50)  # Max width 50
+        ws.column_dimensions[column_letter].width = adjusted_width
 
 def create_sales_details_sheet(wb, brand_name, sales_data):
     """Create Sales Details sheet for a specific brand"""
@@ -46,6 +65,9 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     # Make total row bold
     for cell in ws[ws.max_row]:
         cell.font = Font(bold=True)
+    
+    # Auto-fit columns
+    auto_fit_columns(ws)
 
 def create_inventory_sheet(wb, brand_name, inventory_data):
     """Create Inventory sheet for a specific brand"""
@@ -69,13 +91,16 @@ def create_inventory_sheet(wb, brand_name, inventory_data):
             row.get('sale_price', 0),
             row.get('available_quantity', 0)
         ])
+    
+    # Auto-fit columns
+    auto_fit_columns(ws)
 
 def create_report_sheet(wb, brand_name, sales_data, inventory_data):
     """Create Report sheet for a specific brand"""
-    ws = wb. create_sheet(f"{brand_name} Report")
+    ws = wb.create_sheet(f"{brand_name} Report")
     
     # Get branch name (use first occurrence)
-    branch_name = sales_data.iloc[0]. get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data.iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
     total_inventory_qty = inventory_data. get('available_quantity', pd.Series([0])).sum()
@@ -115,21 +140,24 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data):
         for cell in row:
             if cell.value:
                 cell.font = Font(bold=True)
+    
+    # Auto-fit columns
+    auto_fit_columns(ws)
 
 def process_files(sales_df, inventory_df):
     """Process the sales and inventory files and generate brand reports"""
     
     # Normalize column names (strip whitespace)
-    sales_df.columns = sales_df.columns. str.strip()
+    sales_df. columns = sales_df.columns. str.strip()
     inventory_df.columns = inventory_df. columns.str.strip()
     
-    # Get unique brands from sales data
+    # Get unique brands from sales data only
     brands = sales_df['brand'].dropna().unique()
     
     # Create a BytesIO object to store the ZIP file
     zip_buffer = BytesIO()
     
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile. ZIP_DEFLATED) as zip_file:
         for brand in brands:
             # Filter data for this brand
             brand_sales = sales_df[sales_df['brand'] == brand]
@@ -138,20 +166,30 @@ def process_files(sales_df, inventory_df):
             # Create workbook
             wb = Workbook()
             # Remove default sheet
-            wb.remove(wb. active)
+            if 'Sheet' in wb. sheetnames:
+                wb. remove(wb['Sheet'])
             
             # Create sheets
             create_sales_details_sheet(wb, brand, brand_sales)
             create_inventory_sheet(wb, brand, brand_inventory)
             create_report_sheet(wb, brand, brand_sales, brand_inventory)
             
-            # Save to BytesIO
+            # Save to BytesIO with proper handling
             excel_buffer = BytesIO()
             wb.save(excel_buffer)
-            excel_buffer.seek(0)
+            
+            # Get the value BEFORE closing
+            excel_data = excel_buffer.getvalue()
+            
+            # Sanitize brand name for filename
+            safe_brand_name = str(brand).replace('/', '-').replace('\\', '-').strip()
             
             # Add to ZIP
-            zip_file.writestr(f"{brand}. xlsx", excel_buffer.getvalue())
+            zip_file. writestr(f"{safe_brand_name}.xlsx", excel_data)
+            
+            # Close buffers
+            excel_buffer.close()
+            wb.close()
     
     zip_buffer.seek(0)
     return zip_buffer
@@ -211,7 +249,7 @@ if sales_file and inventory_file:
                     use_container_width=True
                 )
                 
-        except Exception as e: 
+        except Exception as e:
             st.error(f"❌ Error processing files: {str(e)}")
             st.exception(e)
 else:
@@ -227,11 +265,12 @@ with st.expander("📖 Instructions"):
     4. Download the generated ZIP file containing all brand reports
     
     ### What you'll get:
-    - Separate Excel file for each brand
+    - Separate Excel file for each brand that has sales
     - Each file contains 3 sheets: 
-        - **Sales Details**:  Sales data with totals
-        - **Inventory**: Stock/inventory data
+        - **Sales Details**: Sales data with totals
+        - **Inventory**:  Stock/inventory data
         - **Report**: Summary with calculations
+    - All columns are auto-fitted for easy reading
     
     ### Required Columns:
     **Sales Sheet:**
