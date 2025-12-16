@@ -31,45 +31,45 @@ def auto_fit_columns(ws):
         ws.column_dimensions[column_letter].width = adjusted_width
 
 def clean_brand_names(df):
-    """Clean brand names: remove extra spaces and normalize case"""
+    """Clean brand names:  remove extra spaces and normalize case"""
     if 'brand' in df.columns:
-        # Strip whitespace and convert to title case for consistency
         df['brand'] = df['brand'].astype(str).str.strip().str.title()
     return df
 
-def remove_refunds_and_original_sales(sales_df, debug_mode=False):
-    """
-    Remove refund transactions AND their corresponding original sales
-    """
+def get_brand_deal_text(deal_percentage, rent_amount):
+    """Generate brand deal text based on percentage and rent"""
+    has_percentage = deal_percentage > 0
+    has_rent = rent_amount > 0
+    
+    if has_rent and has_percentage:
+        return f"{rent_amount} EGP + {deal_percentage}% Deducted From The Sales"
+    elif has_rent: 
+        return f"{rent_amount} EGP"
+    elif has_percentage:
+        return f"{deal_percentage}% Deducted From The Sales"
+    else:
+        return ""
+
+def remove_refunds_and_original_sales(sales_df):
+    """Remove refund transactions AND their corresponding original sales"""
     if 'quantity' not in sales_df.columns or 'barcode' not in sales_df. columns:
-        return sales_df
+        return sales_df, 0, 0
     
     original_count = len(sales_df)
-    
-    # Find all refunds (negative quantity)
     refunds = sales_df[sales_df['quantity'] < 0]. copy()
     
     if len(refunds) == 0:
-        if debug_mode:
-            st. write("✅ **No refunds found**")
-        return sales_df
+        return sales_df, 0, 0
     
-    if debug_mode:
-        st. write(f"🔍 **Found {len(refunds)} refund transactions**")
-    
-    # Track indices to remove
+    refund_count = len(refunds)
     indices_to_remove = set()
-    
-    # Add all refund indices
     indices_to_remove.update(refunds.index. tolist())
     
-    # For each refund, find and mark the original sale
     for idx, refund_row in refunds.iterrows():
         barcode = refund_row. get('barcode')
         refund_qty = abs(refund_row. get('quantity', 0))
         brand = refund_row.get('brand')
         
-        # Find matching original sales
         potential_originals = sales_df[
             (sales_df['barcode'] == barcode) &
             (sales_df['brand'] == brand) &
@@ -77,44 +77,32 @@ def remove_refunds_and_original_sales(sales_df, debug_mode=False):
             (~sales_df. index.isin(indices_to_remove))
         ]
         
-        # Match by quantity
         matching_sales = potential_originals[potential_originals['quantity'] == refund_qty]
         
         if len(matching_sales) > 0:
-            # Remove the first matching sale
             indices_to_remove.add(matching_sales.index[0])
     
-    # Remove all marked transactions
     cleaned_df = sales_df[~sales_df.index.isin(indices_to_remove)].copy()
-    
     removed_count = original_count - len(cleaned_df)
     
-    if debug_mode:
-        st.write(f"🚫 **Removed {removed_count} transactions** ({len(refunds)} refunds + {removed_count - len(refunds)} original sales)")
-    
-    return cleaned_df
+    return cleaned_df, refund_count, removed_count
 
 def get_best_selling_size(sales_data):
     """Extract and find the best selling size from product names"""
-    if len(sales_data) == 0 or 'name_ar' not in sales_data. columns:
+    if len(sales_data) == 0 or 'name_ar' not in sales_data.columns:
         return ''
     
-    # Extract sizes from product names (last part after last hyphen)
     size_sales = {}
     
     for _, row in sales_data.iterrows():
         product_name = str(row. get('name_ar', ''))
         quantity = row.get('quantity', 0)
         
-        # Extract size (last part after last hyphen)
-        if '-' in product_name: 
+        if '-' in product_name:
             size = product_name.split('-')[-1]. strip()
-            
-            # Add to size sales count
-            if size: 
+            if size:
                 size_sales[size] = size_sales.get(size, 0) + quantity
     
-    # Find the best selling size
     if size_sales:
         best_size = max(size_sales, key=size_sales.get)
         return best_size
@@ -126,10 +114,9 @@ def get_best_selling_products(sales_data):
     if len(sales_data) == 0 or 'name_ar' not in sales_data.columns:
         return ''
     
-    # Count sales per product
     product_sales = {}
     
-    for _, row in sales_data.iterrows():
+    for _, row in sales_data. iterrows():
         product_name = str(row.get('name_ar', ''))
         quantity = row.get('quantity', 0)
         
@@ -139,38 +126,30 @@ def get_best_selling_products(sales_data):
     if not product_sales:
         return ''
     
-    # Find the maximum sales quantity
     max_sales = max(product_sales. values())
-    
-    # Get all products with max sales
     best_products = [product for product, sales in product_sales.items() if sales == max_sales]
     
-    # Format output
     if len(best_products) == 1:
         return best_products[0]
     else:
-        # Multiple best sellers
         return ', '.join(best_products)
 
 def create_sales_details_sheet(wb, brand_name, sales_data):
     """Create Sales Details sheet for a specific brand"""
     ws = wb.create_sheet(f"{brand_name} Sales Details")
     
-    # Headers
     headers = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
-    ws.append(headers)
+    ws. append(headers)
     
-    # Make headers bold
     for cell in ws[1]:
         cell.font = Font(bold=True)
     
-    # Add data
     total_quantity = 0
     total_price = 0
     
     for _, row in sales_data.iterrows():
         ws.append([
-            row.get('branch_name', ''),
+            row. get('branch_name', ''),
             row.get('brand', ''),
             row.get('name_ar', ''),
             row.get('barcode', ''),
@@ -180,30 +159,24 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
         total_quantity += row.get('quantity', 0)
         total_price += row.get('total', 0)
     
-    # Add totals row
     total_row = ['', '', '', '', f'Total={total_quantity}', f'Total={total_price}']
     ws.append(total_row)
     
-    # Make total row bold
     for cell in ws[ws.max_row]:
         cell.font = Font(bold=True)
     
-    # Auto-fit columns
     auto_fit_columns(ws)
 
 def create_inventory_sheet(wb, brand_name, inventory_data):
     """Create Inventory sheet for a specific brand"""
     ws = wb.create_sheet(f"{brand_name} Inventory")
     
-    # Headers
     headers = ['Branch Name', 'Brand', 'Product Name', 'Barcodes', 'Product Price', 'Available Quantity']
     ws.append(headers)
     
-    # Make headers bold
     for cell in ws[1]:
         cell.font = Font(bold=True)
     
-    # Add data
     for _, row in inventory_data.iterrows():
         ws.append([
             row.get('branch_name', ''),
@@ -214,15 +187,13 @@ def create_inventory_sheet(wb, brand_name, inventory_data):
             row.get('available_quantity', 0)
         ])
     
-    # Auto-fit columns
     auto_fit_columns(ws)
 
-def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle):
+def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle, brand_settings):
     """Create Report sheet for a specific brand"""
     ws = wb.create_sheet(f"{brand_name} Report")
     
-    # Get branch name (use first occurrence)
-    branch_name = sales_data.iloc[0]. get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data.iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
     total_inventory_qty = inventory_data.get('available_quantity', pd.Series([0])).sum()
@@ -231,7 +202,18 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     total_sales_qty = sales_data.get('quantity', pd.Series([0])).sum()
     total_sales_money = sales_data.get('total', pd.Series([0])).sum()
     
-    # Get best selling size and products
+    # Get brand settings
+    deal_percentage = brand_settings.get('deal_percentage', 0)
+    rent_amount = brand_settings.get('rent_amount', 0)
+    
+    # Generate brand deal text
+    brand_deal_text = get_brand_deal_text(deal_percentage, rent_amount)
+    
+    # Calculate after percentage and rent
+    total_after_percentage = total_sales_money - (total_sales_money * deal_percentage / 100)
+    total_after_rent = total_after_percentage - rent_amount
+    
+    # Get best selling info
     best_size = get_best_selling_size(sales_data)
     best_products = get_best_selling_products(sales_data)
     
@@ -241,7 +223,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
         ['', ''],
         ['Brand Name:', brand_name],
         ['', ''],
-        ['Brand Deal:', ''],
+        ['Brand Deal:', brand_deal_text],
         ['', ''],
         ['Payout Period:', payout_cycle],
         ['', ''],
@@ -253,96 +235,68 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
         ['', ''],
         ['Total Sales (Products Quantities):', total_sales_qty],
         ['Total sales (Money):', total_sales_money],
-        ['Total Sales After Percentage', ''],
-        ['Total Sales After Rent:', '']
+        ['Total Sales After Percentage:', total_after_percentage],
+        ['Total Sales After Rent:', total_after_rent]
     ]
     
-    # Add data
     for row_data in report_data:
         ws.append(row_data)
     
-    # Make all labels in column A bold
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
+    for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
                 cell.font = Font(bold=True)
     
-    # Auto-fit columns
     auto_fit_columns(ws)
 
-def process_files(sales_df, inventory_df, payout_cycle, debug_mode=False):
+def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
     """Process the sales and inventory files and generate brand reports"""
     
-    # Step 1: Clean column names
-    sales_df. columns = sales_df.columns. str.strip()
-    inventory_df.columns = inventory_df. columns.str.strip()
+    sales_df. columns = sales_df.columns.str.strip()
+    inventory_df.columns = inventory_df.columns.str.strip()
     
-    # Step 1.5: Clean brand names (remove spaces, normalize case)
     sales_df = clean_brand_names(sales_df)
     inventory_df = clean_brand_names(inventory_df)
     
-    if debug_mode:
-        st.write(f"📊 **Total Sales Rows (raw):** {len(sales_df)}")
-        st.write(f"📊 **Sales Columns:** {list(sales_df.columns)}")
-        st.write(f"📊 **Unique Brands (after cleaning):** {sales_df['brand'].nunique()}")
-    
-    # Step 2: Remove completely empty rows
     sales_df = sales_df.dropna(how='all')
     inventory_df = inventory_df.dropna(how='all')
     
-    # Step 3: Remove refunds AND their original sales
-    sales_df = remove_refunds_and_original_sales(sales_df, debug_mode=debug_mode)
+    # Remove refunds and get stats
+    sales_df, refund_count, total_removed = remove_refunds_and_original_sales(sales_df)
     
-    if debug_mode:
-        st. write(f"📊 **Total Sales Rows (after cleaning):** {len(sales_df)}")
-    
-    # Step 4: Get unique brands from sales data
     brands = sales_df['brand'].dropna().unique()
     
-    if debug_mode:
-        st.write(f"📊 **Unique Brands Found:** {len(brands)}")
-        for brand in brands:
-            brand_count = len(sales_df[sales_df['brand'] == brand])
-            st.write(f"  - **{brand}:** {brand_count} sales")
+    # Show processing summary
+    st.info(f"📊 **Processing Summary:**\n- **{len(brands)} brands** detected\n- **{refund_count} refunds** + **{total_removed - refund_count} original sales** removed ({total_removed} total transactions deleted)")
     
-    # Create a BytesIO object to store the ZIP file
     zip_buffer = BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         for brand in brands:
-            # Filter data for this brand
             brand_sales = sales_df[sales_df['brand'] == brand]. copy()
-            brand_inventory = inventory_df[inventory_df['brand'] == brand]. copy()
+            brand_inventory = inventory_df[inventory_df['brand'] == brand].copy()
             
-            if debug_mode:
-                st.write(f"🔍 **Processing {brand}:** {len(brand_sales)} sales rows")
-            
-            # Skip if no sales data
             if len(brand_sales) == 0:
                 continue
             
-            # Create workbook
+            # Get brand settings
+            brand_settings = brand_settings_dict.get(brand, {'deal_percentage': 0, 'rent_amount': 0})
+            
             wb = Workbook()
             if 'Sheet' in wb.sheetnames:
                 wb.remove(wb['Sheet'])
             
-            # Create sheets (pass payout_cycle to report sheet)
             create_sales_details_sheet(wb, brand, brand_sales)
             create_inventory_sheet(wb, brand, brand_inventory)
-            create_report_sheet(wb, brand, brand_sales, brand_inventory, payout_cycle)
+            create_report_sheet(wb, brand, brand_sales, brand_inventory, payout_cycle, brand_settings)
             
-            # Save to BytesIO
             excel_buffer = BytesIO()
             wb.save(excel_buffer)
             excel_data = excel_buffer.getvalue()
             
-            # Sanitize brand name
             safe_brand_name = str(brand).replace('/', '-').replace('\\', '-').replace(':', '-').strip()
+            zip_file.writestr(f"{safe_brand_name}.xlsx", excel_data)
             
-            # Add to ZIP
-            zip_file. writestr(f"{safe_brand_name}.xlsx", excel_data)
-            
-            # Close buffers
             excel_buffer.close()
             wb.close()
     
@@ -355,66 +309,115 @@ st.markdown("Generate brand-specific sales and inventory reports from Excel file
 
 st.divider()
 
-# Debug mode toggle
-debug_mode = st.checkbox("🔍 Enable Debug Mode (show detailed info)", value=False)
-
-# Payout Cycle Dropdown
+# Payout Cycle
 st.subheader("📅 Payout Cycle")
-payout_cycle = st. selectbox(
+payout_cycle = st.selectbox(
     "Select Payout Cycle",
     options=["Payout Cycle 1", "Payout Cycle 2"],
     index=0,
-    help="This will appear in the Report sheet under 'Payout Period'"
+    help="This will appear in the Report sheet"
 )
 
 st.divider()
 
-# File uploaders
-col1, col2 = st.columns(2)
+# Sales file upload
+st.subheader("📈 Sales Sheet")
+sales_file = st.file_uploader(
+    "Upload Sales Excel File",
+    type=['xlsx', 'xls'],
+    key='sales',
+    help="Upload sales data to detect brands"
+)
 
-with col1:
-    st. subheader("📈 Sales Sheet")
-    sales_file = st.file_uploader(
-        "Upload Sales Excel File",
-        type=['xlsx', 'xls'],
-        key='sales',
-        help="Upload the sales data Excel file"
-    )
+# Brand settings (show after sales upload)
+brand_settings_dict = {}
 
-with col2:
-    st. subheader("📦 Inventory Sheet")
-    inventory_file = st.file_uploader(
-        "Upload Inventory Excel File",
-        type=['xlsx', 'xls'],
-        key='inventory',
-        help="Upload the inventory data Excel file"
-    )
+if sales_file:
+    try:
+        # Read and process sales file
+        sales_df_temp = pd.read_excel(sales_file)
+        sales_df_temp. columns = sales_df_temp. columns.str.strip()
+        sales_df_temp = clean_brand_names(sales_df_temp)
+        sales_df_temp = sales_df_temp.dropna(how='all')
+        sales_df_temp, _, _ = remove_refunds_and_original_sales(sales_df_temp)
+        
+        brands = sales_df_temp['brand'].dropna().unique()
+        
+        st.success(f"✅ Found {len(brands)} brand(s) in Sales data")
+        
+        st.divider()
+        st.subheader("📊 Brand Settings")
+        st.markdown("Enter deal percentage and/or rent amount for each brand:")
+        st.info("💡 **Tip:** Leave at 0 if not applicable.  You can set percentage only, rent only, or both.")
+        
+        # Create form for each brand
+        for brand in sorted(brands):
+            with st.expander(f"🏷️ **{brand}**", expanded=True):
+                col1, col2 = st. columns(2)
+                
+                with col1:
+                    deal_percentage = st.number_input(
+                        "Deal Percentage (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=0.0,
+                        step=0.5,
+                        key=f"deal_{brand}",
+                        help="Percentage to deduct from total sales (leave 0 if no percentage)"
+                    )
+                
+                with col2:
+                    rent_amount = st.number_input(
+                        "Rent Amount (EGP)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=100.0,
+                        key=f"rent_{brand}",
+                        help="Fixed rent amount to deduct (leave 0 if no rent)"
+                    )
+                
+                # Show preview of brand deal text
+                preview_text = get_brand_deal_text(deal_percentage, rent_amount)
+                if preview_text:
+                    st.caption(f"📝 Brand Deal will show: **{preview_text}**")
+                else:
+                    st.caption("📝 No deal configured for this brand")
+                
+                brand_settings_dict[brand] = {
+                    'deal_percentage': deal_percentage,
+                    'rent_amount': rent_amount
+                }
+        
+    except Exception as e:
+        st.error(f"❌ Error reading sales file: {str(e)}")
 
 st.divider()
 
-# Process button
-if sales_file and inventory_file:
+# Inventory file upload
+st.subheader("📦 Inventory Sheet")
+inventory_file = st.file_uploader(
+    "Upload Inventory Excel File",
+    type=['xlsx', 'xls'],
+    key='inventory',
+    help="Upload inventory data"
+)
+
+st.divider()
+
+# Generate button
+if sales_file and inventory_file and len(brand_settings_dict) > 0:
     if st.button("🚀 Generate Reports", type="primary", use_container_width=True):
         try:
             with st.spinner("Processing files...  Please wait"):
-                # Read Excel files
                 sales_df = pd.read_excel(sales_file)
-                inventory_df = pd. read_excel(inventory_file)
+                inventory_df = pd.read_excel(inventory_file)
                 
-                if debug_mode:
-                    st.write("### 🔍 Debug Information:")
+                zip_buffer = process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict)
                 
-                # Process and create ZIP (pass payout_cycle)
-                zip_buffer = process_files(sales_df, inventory_df, payout_cycle, debug_mode=debug_mode)
-                
-                # Get number of brands (after cleaning)
-                sales_df = clean_brand_names(sales_df)
-                brands_count = sales_df['brand']. dropna().nunique()
+                brands_count = len(brand_settings_dict)
                 
                 st.success(f"✅ Successfully generated reports for {brands_count} brand(s)!")
-                st.info(f"📅 **Payout Cycle:** {payout_cycle}")
                 
-                # Download button
                 st.download_button(
                     label="📥 Download Brands Reports (ZIP)",
                     data=zip_buffer,
@@ -427,50 +430,9 @@ if sales_file and inventory_file:
             st.error(f"❌ Error processing files: {str(e)}")
             st.exception(e)
 else:
-    st.info("ℹ️ Please upload both Sales and Inventory Excel files to continue")
-
-# Instructions
-with st.expander("📖 Instructions"):
-    st.markdown("""
-    ### How to use: 
-    1. **Select Payout Cycle** - Choose between Payout Cycle 1 or 2
-    2. **Upload Sales Sheet** - Your sales data Excel file
-    3. **Upload Inventory Sheet** - Your inventory/stock Excel file
-    4. **(Optional)** Enable **Debug Mode** to see detailed processing info
-    5. Click **Generate Reports** button
-    6. Download the generated ZIP file containing all brand reports
-    
-    ### What you'll get:
-    - Separate Excel file for each brand that has sales
-    - Each file contains 3 sheets: 
-        - **Sales Details**: All sales data with totals (refunds excluded)
-        - **Inventory**: Stock/inventory data
-        - **Report**: Summary with calculations, best selling size & products, and selected Payout Cycle
-    - All columns are auto-fitted for easy reading
-    - Refunds are automatically removed along with their original transactions
-    - Brand names are automatically cleaned (spaces removed, case normalized)
-    
-    ### Best Selling Analysis:
-    - **Best Selling Size**: Automatically extracted from product names (last part after hyphen)
-    - **Best Selling Product**: The product(s) with highest sales quantity
-    - If multiple products have same top sales, all are listed
-    
-    ### Debug Mode:
-    - Shows exactly how many sales each brand has
-    - Shows how many refunds and original sales were removed
-    - Helps identify if any data is being lost
-    
-    ### Required Columns:
-    **Sales Sheet:**
-    - brand, branch_name, name_ar, barcode, quantity, total
-    
-    **Inventory Sheet:**
-    - brand, branch_name, name_en, barcodes, sale_price, available_quantity
-    """)
-
-# Footer
-st.divider()
-st.markdown(
-    "<p style='text-align: center; color: #666;'>Made with ❤️ for Slotx</p>",
-    unsafe_allow_html=True
-)
+    if not sales_file:
+        st.info("ℹ️ Please upload Sales Excel file first")
+    elif not inventory_file:
+        st.info("ℹ️ Please upload Inventory Excel file")
+    else:
+        st. info("ℹ️ Please fill in brand settings above")
