@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slotx Sales & Inventory Reports Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background:  linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow:  0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-section {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            color: #555;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        . file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border:  2px dashed #ddd;
+            border-radius:  10px;
+            cursor:  pointer;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+        
+        .file-input-label:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+        }
+        
+        . file-input-label. has-file {
+            background: #e7f3ff;
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        .file-icon {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding:  15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition:  transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 20px;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        
+        . submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius:  10px;
+            padding:  15px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #856404;
+        }
+        
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loader. active {
+            display: block;
+        }
+        
+        . spinner {
+            border: 4px solid #f3f3f3;
+            border-top:  4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform:  rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Slotx Reports Generator</h1>
+        <p class="subtitle">Generate brand-specific sales and inventory reports</p>
+        
+        <form id="uploadForm" method="POST" enctype="multipart/form-data">
+            <div class="upload-section">
+                <label for="sales_file">📈 Sales Sheet</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="sales_file" name="sales_file" accept=". xlsx,.xls" required>
+                    <label for="sales_file" class="file-input-label" id="sales_label">
+                        <span class="file-icon">📄</span>
+                        <span class="file-text">Choose sales file... </span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="upload-section">
+                <label for="inventory_file">📦 Inventory Sheet</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="inventory_file" name="inventory_file" accept=".xlsx,.xls" required>
+                    <label for="inventory_file" class="file-input-label" id="inventory_label">
+                        <span class="file-icon">📄</span>
+                        <span class="file-text">Choose inventory file...</span>
+                    </label>
+                </div>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">
+                🚀 Generate Reports
+            </button>
+            
+            <div class="loader" id="loader">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px; color: #666;">Processing files...</p>
+            </div>
+        </form>
+        
+        <div class="info-box">
+            <strong>ℹ️ Instructions:</strong>
+            1. Upload your Sales Excel file<br>
+            2. Upload your Inventory Excel file<br>
+            3. Click "Generate Reports"<br>
+            4. Download the ZIP file containing all brand reports
+        </div>
+    </div>
+    
+    <script>
+        // Handle file input display
+        document.getElementById('sales_file').addEventListener('change', function(e) {
+            const label = document.getElementById('sales_label');
+            const fileText = label.querySelector('.file-text');
+            if (e.target.files.length > 0) {
+                fileText.textContent = e.target.files[0].name;
+                label.classList.add('has-file');
+            } else {
+                fileText.textContent = 'Choose sales file...';
+                label.classList.remove('has-file');
+            }
+        });
+        
+        document.getElementById('inventory_file').addEventListener('change', function(e) {
+            const label = document.getElementById('inventory_label');
+            const fileText = label.querySelector('.file-text');
+            if (e.target.files.length > 0) {
+                fileText.textContent = e.target.files[0].name;
+                label.classList.add('has-file');
+            } else {
+                fileText.textContent = 'Choose inventory file...';
+                label.classList.remove('has-file');
+            }
+        });
+        
+        // Handle form submission
+        document.getElementById('uploadForm').addEventListener('submit', function() {
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('loader').classList.add('active');
+        });
+    </script>
+</body>
+</html>
