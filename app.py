@@ -19,7 +19,7 @@ def auto_fit_columns(ws):
         column_letter = get_column_letter(column[0].column)
         
         for cell in column:
-            try: 
+            try:
                 if cell.value:
                     cell_length = len(str(cell.value))
                     if cell_length > max_length:
@@ -56,7 +56,7 @@ def remove_refunds_and_original_sales(sales_df):
         return sales_df, 0, 0
     
     original_count = len(sales_df)
-    refunds = sales_df[sales_df['quantity'] < 0]. copy()
+    refunds = sales_df[sales_df['quantity'] < 0].copy()
     
     if len(refunds) == 0:
         return sales_df, 0, 0
@@ -100,7 +100,7 @@ def get_best_selling_size(sales_data):
         
         if '-' in product_name:
             size = product_name.split('-')[-1]. strip()
-            if size:
+            if size: 
                 size_sales[size] = size_sales.get(size, 0) + quantity
     
     if size_sales:
@@ -295,7 +295,7 @@ def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
             excel_data = excel_buffer.getvalue()
             
             safe_brand_name = str(brand).replace('/', '-').replace('\\', '-').replace(':', '-').strip()
-            zip_file.writestr(f"{safe_brand_name}.xlsx", excel_data)
+            zip_file.writestr(f"{safe_brand_name}. xlsx", excel_data)
             
             excel_buffer.close()
             wb.close()
@@ -311,12 +311,18 @@ st.divider()
 
 # Payout Cycle
 st.subheader("📅 Payout Cycle")
-payout_cycle = st.selectbox(
+payout_cycle = st. selectbox(
     "Select Payout Cycle",
-    options=["Payout Cycle 1", "Payout Cycle 2"],
+    options=["-- Select Payout Cycle --", "Payout Cycle 1", "Payout Cycle 2"],
     index=0,
-    help="This will appear in the Report sheet"
+    help="Choose the payout cycle for this report"
 )
+
+# Validate payout cycle selection
+payout_cycle_selected = payout_cycle != "-- Select Payout Cycle --"
+
+if not payout_cycle_selected: 
+    st.warning("⚠️ Please select a Payout Cycle to continue")
 
 st.divider()
 
@@ -405,7 +411,7 @@ inventory_file = st.file_uploader(
 st.divider()
 
 # Generate button
-if sales_file and inventory_file and len(brand_settings_dict) > 0:
+if payout_cycle_selected and sales_file and inventory_file and len(brand_settings_dict) > 0:
     if st.button("🚀 Generate Reports", type="primary", use_container_width=True):
         try:
             with st.spinner("Processing files...  Please wait"):
@@ -430,9 +436,11 @@ if sales_file and inventory_file and len(brand_settings_dict) > 0:
             st.error(f"❌ Error processing files: {str(e)}")
             st.exception(e)
 else:
-    if not sales_file:
-        st.info("ℹ️ Please upload Sales Excel file first")
+    if not payout_cycle_selected:
+        st.info("ℹ️ Please select a Payout Cycle first")
+    elif not sales_file:
+        st.info("ℹ️ Please upload Sales Excel file")
     elif not inventory_file:
         st.info("ℹ️ Please upload Inventory Excel file")
     else:
-        st. info("ℹ️ Please fill in brand settings above")
+        st.info("ℹ️ Please fill in brand settings above")
