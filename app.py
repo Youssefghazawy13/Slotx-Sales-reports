@@ -5,6 +5,7 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 import zipfile
 from io import BytesIO
+from datetime import datetime
 
 st.set_page_config(
     page_title="Slotx Sales & Inventory Reports",
@@ -19,7 +20,7 @@ def auto_fit_columns(ws):
         column_letter = get_column_letter(column[0].column)
         
         for cell in column:
-            try:
+            try: 
                 if cell.value:
                     cell_length = len(str(cell.value))
                     if cell_length > max_length:
@@ -31,7 +32,7 @@ def auto_fit_columns(ws):
         ws.column_dimensions[column_letter].width = adjusted_width
 
 def clean_brand_names(df):
-    """Clean brand names:  remove extra spaces and normalize case"""
+    """Clean brand names:   remove extra spaces and normalize case"""
     if 'brand' in df.columns:
         df['brand'] = df['brand'].astype(str).str.strip().str.title()
     return df
@@ -43,7 +44,7 @@ def get_brand_deal_text(deal_percentage, rent_amount):
     
     if has_rent and has_percentage:
         return f"{rent_amount} EGP + {deal_percentage}% Deducted From The Sales"
-    elif has_rent: 
+    elif has_rent:  
         return f"{rent_amount} EGP"
     elif has_percentage:
         return f"{deal_percentage}% Deducted From The Sales"
@@ -56,7 +57,7 @@ def remove_refunds_and_original_sales(sales_df):
         return sales_df, 0, 0
     
     original_count = len(sales_df)
-    refunds = sales_df[sales_df['quantity'] < 0].copy()
+    refunds = sales_df[sales_df['quantity'] < 0]. copy()
     
     if len(refunds) == 0:
         return sales_df, 0, 0
@@ -100,7 +101,7 @@ def get_best_selling_size(sales_data):
         
         if '-' in product_name:
             size = product_name.split('-')[-1]. strip()
-            if size: 
+            if size:  
                 size_sales[size] = size_sales.get(size, 0) + quantity
     
     if size_sales:
@@ -120,13 +121,13 @@ def get_best_selling_products(sales_data):
         product_name = str(row.get('name_ar', ''))
         quantity = row.get('quantity', 0)
         
-        if product_name: 
-            product_sales[product_name] = product_sales.get(product_name, 0) + quantity
+        if product_name:  
+            product_sales[product_name] = product_sales. get(product_name, 0) + quantity
     
     if not product_sales:
         return ''
     
-    max_sales = max(product_sales. values())
+    max_sales = max(product_sales.values())
     best_products = [product for product, sales in product_sales.items() if sales == max_sales]
     
     if len(best_products) == 1:
@@ -139,7 +140,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     ws = wb.create_sheet(f"{brand_name} Sales Details")
     
     headers = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
-    ws. append(headers)
+    ws.append(headers)
     
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -149,7 +150,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     for _, row in sales_data.iterrows():
         ws.append([
-            row. get('branch_name', ''),
+            row.get('branch_name', ''),
             row.get('brand', ''),
             row.get('name_ar', ''),
             row.get('barcode', ''),
@@ -245,7 +246,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
-                cell.font = Font(bold=True)
+                cell. font = Font(bold=True)
     
     auto_fit_columns(ws)
 
@@ -282,7 +283,15 @@ def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
             # Get brand settings
             brand_settings = brand_settings_dict.get(brand, {'deal_percentage': 0, 'rent_amount': 0})
             
+            # Create workbook with proper metadata
             wb = Workbook()
+            
+            # Add metadata to prevent Excel locked/protected view issues
+            wb.properties.creator = "Slotx Reports Generator"
+            wb.properties.lastModifiedBy = "Slotx Reports Generator"
+            wb.properties.created = datetime.now()
+            wb.properties.modified = datetime.now()
+            
             if 'Sheet' in wb.sheetnames:
                 wb.remove(wb['Sheet'])
             
@@ -295,7 +304,7 @@ def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
             excel_data = excel_buffer.getvalue()
             
             safe_brand_name = str(brand).replace('/', '-').replace('\\', '-').replace(':', '-').strip()
-            zip_file.writestr(f"{safe_brand_name}. xlsx", excel_data)
+            zip_file.writestr(f"{safe_brand_name}.xlsx", excel_data)
             
             excel_buffer.close()
             wb.close()
@@ -311,7 +320,7 @@ st.divider()
 
 # Payout Cycle
 st.subheader("📅 Payout Cycle")
-payout_cycle = st. selectbox(
+payout_cycle = st.selectbox(
     "Select Payout Cycle",
     options=["-- Select Payout Cycle --", "Payout Cycle 1", "Payout Cycle 2"],
     index=0,
@@ -321,7 +330,7 @@ payout_cycle = st. selectbox(
 # Validate payout cycle selection
 payout_cycle_selected = payout_cycle != "-- Select Payout Cycle --"
 
-if not payout_cycle_selected: 
+if not payout_cycle_selected:  
     st.warning("⚠️ Please select a Payout Cycle to continue")
 
 st.divider()
@@ -354,7 +363,7 @@ if sales_file:
         st.divider()
         st.subheader("📊 Brand Settings")
         st.markdown("Enter deal percentage and/or rent amount for each brand:")
-        st.info("💡 **Tip:** Leave at 0 if not applicable.  You can set percentage only, rent only, or both.")
+        st.info("💡 **Tip:** Leave at 0 if not applicable.   You can set percentage only, rent only, or both.")
         
         # Create form for each brand
         for brand in sorted(brands):
@@ -390,7 +399,7 @@ if sales_file:
                     st.caption("📝 No deal configured for this brand")
                 
                 brand_settings_dict[brand] = {
-                    'deal_percentage': deal_percentage,
+                    'deal_percentage':  deal_percentage,
                     'rent_amount': rent_amount
                 }
         
@@ -427,16 +436,16 @@ if payout_cycle_selected and sales_file and inventory_file and len(brand_setting
                 st.download_button(
                     label="📥 Download Brands Reports (ZIP)",
                     data=zip_buffer,
-                    file_name=f"Brands_Reports_{payout_cycle. replace(' ', '_')}.zip",
+                    file_name=f"Brands_Reports_{payout_cycle.replace(' ', '_')}.zip",
                     mime="application/zip",
                     use_container_width=True
                 )
                 
-        except Exception as e:
+        except Exception as e: 
             st.error(f"❌ Error processing files: {str(e)}")
             st.exception(e)
 else:
-    if not payout_cycle_selected:
+    if not payout_cycle_selected: 
         st.info("ℹ️ Please select a Payout Cycle first")
     elif not sales_file:
         st.info("ℹ️ Please upload Sales Excel file")
