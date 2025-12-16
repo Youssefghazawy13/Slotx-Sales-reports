@@ -1,19 +1,15 @@
-from flask import Flask, request, render_template, send_file
+import streamlit as st
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font
-import os
 import zipfile
 from io import BytesIO
-from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
-
-ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+st.set_page_config(
+    page_title="Slotx Sales & Inventory Reports",
+    page_icon="📊",
+    layout="centered"
+)
 
 def create_sales_details_sheet(wb, brand_name, sales_data):
     """Create Sales Details sheet for a specific brand"""
@@ -21,7 +17,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     # Headers
     headers = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
-    ws.append(headers)
+    ws. append(headers)
     
     # Make headers bold
     for cell in ws[1]:
@@ -76,13 +72,13 @@ def create_inventory_sheet(wb, brand_name, inventory_data):
 
 def create_report_sheet(wb, brand_name, sales_data, inventory_data):
     """Create Report sheet for a specific brand"""
-    ws = wb.create_sheet(f"{brand_name} Report")
+    ws = wb. create_sheet(f"{brand_name} Report")
     
     # Get branch name (use first occurrence)
-    branch_name = sales_data.iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data.iloc[0]. get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
-    total_inventory_qty = inventory_data.get('available_quantity', pd.Series([0])).sum()
+    total_inventory_qty = inventory_data. get('available_quantity', pd.Series([0])).sum()
     total_inventory_value = (inventory_data.get('available_quantity', pd.Series([0])) * 
                             inventory_data.get('sale_price', pd.Series([0]))).sum()
     total_sales_qty = sales_data.get('quantity', pd.Series([0])).sum()
@@ -115,21 +111,17 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data):
         ws.append(row_data)
     
     # Make all labels in column A bold
-    for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
                 cell.font = Font(bold=True)
 
-def process_files(sales_file, inventory_file):
+def process_files(sales_df, inventory_df):
     """Process the sales and inventory files and generate brand reports"""
     
-    # Read Excel files
-    sales_df = pd.read_excel(sales_file)
-    inventory_df = pd. read_excel(inventory_file)
-    
-    # Normalize column names (strip whitespace, lowercase)
-    sales_df.columns = sales_df.columns.str.strip()
-    inventory_df.columns = inventory_df.columns.str. strip()
+    # Normalize column names (strip whitespace)
+    sales_df.columns = sales_df.columns. str.strip()
+    inventory_df.columns = inventory_df. columns.str.strip()
     
     # Get unique brands from sales data
     brands = sales_df['brand'].dropna().unique()
@@ -164,38 +156,104 @@ def process_files(sales_file, inventory_file):
     zip_buffer.seek(0)
     return zip_buffer
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST': 
-        # Check if files are present
-        if 'sales_file' not in request.files or 'inventory_file' not in request.files:
-            return 'Missing files', 400
-        
-        sales_file = request.files['sales_file']
-        inventory_file = request.files['inventory_file']
-        
-        # Validate files
-        if sales_file.filename == '' or inventory_file.filename == '': 
-            return 'No files selected', 400
-        
-        if not (allowed_file(sales_file. filename) and allowed_file(inventory_file.filename)):
-            return 'Invalid file type.  Please upload Excel files (. xlsx or .xls)', 400
-        
-        try:
-            # Process files
-            zip_buffer = process_files(sales_file, inventory_file)
-            
-            # Send ZIP file
-            return send_file(
-                zip_buffer,
-                mimetype='application/zip',
-                as_attachment=True,
-                download_name='Brands_Reports. zip'
-            )
-        except Exception as e:
-            return f'Error processing files: {str(e)}', 500
-    
-    return render_template('index.html')
+# Streamlit UI
+st.title("📊 Slotx Sales & Inventory Reports Generator")
+st.markdown("Generate brand-specific sales and inventory reports from Excel files")
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+st.divider()
+
+# File uploaders
+col1, col2 = st.columns(2)
+
+with col1:
+    st. subheader("📈 Sales Sheet")
+    sales_file = st.file_uploader(
+        "Upload Sales Excel File",
+        type=['xlsx', 'xls'],
+        key='sales',
+        help="Upload the sales data Excel file"
+    )
+
+with col2:
+    st. subheader("📦 Inventory Sheet")
+    inventory_file = st.file_uploader(
+        "Upload Inventory Excel File",
+        type=['xlsx', 'xls'],
+        key='inventory',
+        help="Upload the inventory data Excel file"
+    )
+
+st.divider()
+
+# Process button
+if sales_file and inventory_file:
+    if st.button("🚀 Generate Reports", type="primary", use_container_width=True):
+        try:
+            with st.spinner("Processing files...  Please wait"):
+                # Read Excel files
+                sales_df = pd.read_excel(sales_file)
+                inventory_df = pd. read_excel(inventory_file)
+                
+                # Process and create ZIP
+                zip_buffer = process_files(sales_df, inventory_df)
+                
+                # Get number of brands
+                brands_count = sales_df['brand'].dropna().nunique()
+                
+                st.success(f"✅ Successfully generated reports for {brands_count} brand(s)!")
+                
+                # Download button
+                st.download_button(
+                    label="📥 Download Brands Reports (ZIP)",
+                    data=zip_buffer,
+                    file_name="Brands_Reports.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+                
+        except Exception as e: 
+            st.error(f"❌ Error processing files: {str(e)}")
+            st.exception(e)
+else:
+    st.info("ℹ️ Please upload both Sales and Inventory Excel files to continue")
+
+# Instructions
+with st.expander("📖 Instructions"):
+    st.markdown("""
+    ### How to use:
+    1. **Upload Sales Sheet** - Your sales data Excel file
+    2. **Upload Inventory Sheet** - Your inventory/stock Excel file
+    3. Click **Generate Reports** button
+    4. Download the generated ZIP file containing all brand reports
+    
+    ### What you'll get:
+    - Separate Excel file for each brand
+    - Each file contains 3 sheets: 
+        - **Sales Details**:  Sales data with totals
+        - **Inventory**: Stock/inventory data
+        - **Report**: Summary with calculations
+    
+    ### Required Columns:
+    **Sales Sheet:**
+    - Column G: barcode
+    - Column H: name_ar (Product Name)
+    - Column J: brand
+    - Column L: quantity
+    - Column O: total (Price)
+    - Column V: branch_name
+    
+    **Inventory Sheet:**
+    - Column C: name_en (Product Name)
+    - Column E: branch_name
+    - Column F:  barcodes
+    - Column G: brand
+    - Column J: sale_price
+    - Column N: available_quantity
+    """)
+
+# Footer
+st.divider()
+st.markdown(
+    "<p style='text-align: center; color: #666;'>Made with ❤️ for Slotx</p>",
+    unsafe_allow_html=True
+)
