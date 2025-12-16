@@ -19,7 +19,7 @@ def auto_fit_columns(ws):
         column_letter = get_column_letter(column[0].column)
         
         for cell in column:
-            try:
+            try: 
                 if cell.value:
                     cell_length = len(str(cell.value))
                     if cell_length > max_length:
@@ -29,6 +29,13 @@ def auto_fit_columns(ws):
         
         adjusted_width = min(max_length + 2, 50)
         ws.column_dimensions[column_letter].width = adjusted_width
+
+def clean_brand_names(df):
+    """Clean brand names: remove extra spaces and normalize case"""
+    if 'brand' in df.columns:
+        # Strip whitespace and convert to title case for consistency
+        df['brand'] = df['brand'].astype(str).str.strip().str.title()
+    return df
 
 def remove_refunds_and_original_sales(sales_df, debug_mode=False):
     """
@@ -44,7 +51,7 @@ def remove_refunds_and_original_sales(sales_df, debug_mode=False):
     
     if len(refunds) == 0:
         if debug_mode:
-            st.write("✅ **No refunds found**")
+            st. write("✅ **No refunds found**")
         return sales_df
     
     if debug_mode:
@@ -54,7 +61,7 @@ def remove_refunds_and_original_sales(sales_df, debug_mode=False):
     indices_to_remove = set()
     
     # Add all refund indices
-    indices_to_remove.update(refunds.index.tolist())
+    indices_to_remove.update(refunds.index. tolist())
     
     # For each refund, find and mark the original sale
     for idx, refund_row in refunds.iterrows():
@@ -89,7 +96,7 @@ def remove_refunds_and_original_sales(sales_df, debug_mode=False):
 
 def get_best_selling_size(sales_data):
     """Extract and find the best selling size from product names"""
-    if len(sales_data) == 0 or 'name_ar' not in sales_data.columns:
+    if len(sales_data) == 0 or 'name_ar' not in sales_data. columns:
         return ''
     
     # Extract sizes from product names (last part after last hyphen)
@@ -141,7 +148,7 @@ def get_best_selling_products(sales_data):
     # Format output
     if len(best_products) == 1:
         return best_products[0]
-    else: 
+    else:
         # Multiple best sellers
         return ', '.join(best_products)
 
@@ -151,7 +158,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     # Headers
     headers = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
-    ws. append(headers)
+    ws.append(headers)
     
     # Make headers bold
     for cell in ws[1]:
@@ -163,7 +170,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     for _, row in sales_data.iterrows():
         ws.append([
-            row. get('branch_name', ''),
+            row.get('branch_name', ''),
             row.get('brand', ''),
             row.get('name_ar', ''),
             row.get('barcode', ''),
@@ -215,7 +222,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     ws = wb.create_sheet(f"{brand_name} Report")
     
     # Get branch name (use first occurrence)
-    branch_name = sales_data. iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data.iloc[0]. get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
     total_inventory_qty = inventory_data.get('available_quantity', pd.Series([0])).sum()
@@ -255,7 +262,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
         ws.append(row_data)
     
     # Make all labels in column A bold
-    for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
                 cell.font = Font(bold=True)
@@ -266,13 +273,18 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
 def process_files(sales_df, inventory_df, payout_cycle, debug_mode=False):
     """Process the sales and inventory files and generate brand reports"""
     
-    # Step 1: Clean column names ONLY
-    sales_df. columns = sales_df.columns.str.strip()
-    inventory_df.columns = inventory_df.columns.str.strip()
+    # Step 1: Clean column names
+    sales_df. columns = sales_df.columns. str.strip()
+    inventory_df.columns = inventory_df. columns.str.strip()
+    
+    # Step 1.5: Clean brand names (remove spaces, normalize case)
+    sales_df = clean_brand_names(sales_df)
+    inventory_df = clean_brand_names(inventory_df)
     
     if debug_mode:
-        st. write(f"📊 **Total Sales Rows (raw):** {len(sales_df)}")
+        st.write(f"📊 **Total Sales Rows (raw):** {len(sales_df)}")
         st.write(f"📊 **Sales Columns:** {list(sales_df.columns)}")
+        st.write(f"📊 **Unique Brands (after cleaning):** {sales_df['brand'].nunique()}")
     
     # Step 2: Remove completely empty rows
     sales_df = sales_df.dropna(how='all')
@@ -348,7 +360,7 @@ debug_mode = st.checkbox("🔍 Enable Debug Mode (show detailed info)", value=Fa
 
 # Payout Cycle Dropdown
 st.subheader("📅 Payout Cycle")
-payout_cycle = st.selectbox(
+payout_cycle = st. selectbox(
     "Select Payout Cycle",
     options=["Payout Cycle 1", "Payout Cycle 2"],
     index=0,
@@ -358,10 +370,10 @@ payout_cycle = st.selectbox(
 st.divider()
 
 # File uploaders
-col1, col2 = st. columns(2)
+col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📈 Sales Sheet")
+    st. subheader("📈 Sales Sheet")
     sales_file = st.file_uploader(
         "Upload Sales Excel File",
         type=['xlsx', 'xls'],
@@ -395,8 +407,9 @@ if sales_file and inventory_file:
                 # Process and create ZIP (pass payout_cycle)
                 zip_buffer = process_files(sales_df, inventory_df, payout_cycle, debug_mode=debug_mode)
                 
-                # Get number of brands
-                brands_count = sales_df['brand'].dropna().nunique()
+                # Get number of brands (after cleaning)
+                sales_df = clean_brand_names(sales_df)
+                brands_count = sales_df['brand']. dropna().nunique()
                 
                 st.success(f"✅ Successfully generated reports for {brands_count} brand(s)!")
                 st.info(f"📅 **Payout Cycle:** {payout_cycle}")
@@ -419,7 +432,7 @@ else:
 # Instructions
 with st.expander("📖 Instructions"):
     st.markdown("""
-    ### How to use:
+    ### How to use: 
     1. **Select Payout Cycle** - Choose between Payout Cycle 1 or 2
     2. **Upload Sales Sheet** - Your sales data Excel file
     3. **Upload Inventory Sheet** - Your inventory/stock Excel file
@@ -435,6 +448,7 @@ with st.expander("📖 Instructions"):
         - **Report**: Summary with calculations, best selling size & products, and selected Payout Cycle
     - All columns are auto-fitted for easy reading
     - Refunds are automatically removed along with their original transactions
+    - Brand names are automatically cleaned (spaces removed, case normalized)
     
     ### Best Selling Analysis:
     - **Best Selling Size**: Automatically extracted from product names (last part after hyphen)
