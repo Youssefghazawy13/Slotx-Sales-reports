@@ -20,7 +20,7 @@ def auto_fit_columns(ws):
         column_letter = get_column_letter(column[0].column)
         
         for cell in column:
-            try: 
+            try:
                 if cell.value:
                     cell_length = len(str(cell.value))
                     if cell_length > max_length:
@@ -32,10 +32,35 @@ def auto_fit_columns(ws):
         ws.column_dimensions[column_letter].width = adjusted_width
 
 def clean_brand_names(df):
-    """Clean brand names:  remove extra spaces and normalize case"""
+    """Clean brand names:   remove extra spaces and normalize case"""
     if 'brand' in df.columns:
         df['brand'] = df['brand'].astype(str).str.strip().str.title()
     return df
+
+def load_brand_deals(deals_file):
+    """Load brand deals from uploaded Excel file"""
+    try:
+        deals_df = pd.read_excel(deals_file)
+        deals_df. columns = deals_df.columns.str.strip()
+        
+        # Clean brand names
+        if 'Brand Name' in deals_df.columns:
+            deals_df['Brand Name'] = deals_df['Brand Name'].astype(str).str.strip().str.title()
+        
+        # Create dictionary
+        brand_settings = {}
+        for _, row in deals_df.iterrows():
+            brand = row. get('Brand Name', '')
+            if brand:
+                brand_settings[brand] = {
+                    'deal_percentage': float(row.get('Deal Percentage (%)', 0)),
+                    'rent_amount': float(row.get('Rent Amount (EGP)', 0))
+                }
+        
+        return brand_settings, None
+    
+    except Exception as e:
+        return None, str(e)
 
 def get_brand_deal_text(deal_percentage, rent_amount):
     """Generate brand deal text based on percentage and rent"""
@@ -101,7 +126,7 @@ def get_best_selling_size(sales_data):
         
         if '-' in product_name:
             size = product_name.split('-')[-1]. strip()
-            if size:
+            if size: 
                 size_sales[size] = size_sales.get(size, 0) + quantity
     
     if size_sales:
@@ -127,7 +152,7 @@ def get_best_selling_products(sales_data):
     if not product_sales:
         return ''
     
-    max_sales = max(product_sales.values())
+    max_sales = max(product_sales. values())
     best_products = [product for product, sales in product_sales.items() if sales == max_sales]
     
     if len(best_products) == 1:
@@ -150,7 +175,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     for _, row in sales_data.iterrows():
         ws.append([
-            row. get('branch_name', ''),
+            row.get('branch_name', ''),
             row.get('brand', ''),
             row.get('name_ar', ''),
             row.get('barcode', ''),
@@ -194,7 +219,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     """Create Report sheet for a specific brand"""
     ws = wb.create_sheet(f"{brand_name} Report")
     
-    branch_name = sales_data. iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data.iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
     total_inventory_qty = inventory_data.get('available_quantity', pd.Series([0])).sum()
@@ -243,10 +268,10 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     for row_data in report_data:
         ws.append(row_data)
     
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
+    for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
-                cell.font = Font(bold=True)
+                cell. font = Font(bold=True)
     
     auto_fit_columns(ws)
 
@@ -258,7 +283,7 @@ def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payou
     # Add metadata
     wb.properties.creator = "Slotx Reports Generator"
     wb.properties.lastModifiedBy = "Slotx Reports Generator"
-    wb. properties.created = datetime.now()
+    wb.properties.created = datetime.now()
     wb.properties.modified = datetime.now()
     
     # Remove default sheet
@@ -266,7 +291,7 @@ def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payou
         wb.remove(wb['Sheet'])
     
     # Sheet 1: All Sales Details
-    ws_sales = wb. create_sheet("All Sales Details")
+    ws_sales = wb.create_sheet("All Sales Details")
     headers_sales = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
     ws_sales.append(headers_sales)
     
@@ -323,7 +348,7 @@ def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payou
     auto_fit_columns(ws_inventory)
     
     # Sheet 3: Brands Deals
-    ws_deals = wb. create_sheet("Brands Deals")
+    ws_deals = wb.create_sheet("Brands Deals")
     headers_deals = ['Brand Name', 'Deal Percentage (%)', 'Rent Amount (EGP)', 'Brand Deal']
     ws_deals.append(headers_deals)
     
@@ -343,7 +368,7 @@ def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payou
     auto_fit_columns(ws_deals)
     
     # Sheet 4: Summary Report
-    ws_report = wb. create_sheet("Summary Report")
+    ws_report = wb.create_sheet("Summary Report")
     
     # Calculate best selling sizes (top 3)
     size_sales = {}
@@ -352,8 +377,8 @@ def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payou
         quantity = row.get('quantity', 0)
         if '-' in product_name:
             size = product_name.split('-')[-1].strip()
-            if size:
-                size_sales[size] = size_sales. get(size, 0) + quantity
+            if size: 
+                size_sales[size] = size_sales.get(size, 0) + quantity
     
     top_sizes = sorted(size_sales.items(), key=lambda x: x[1], reverse=True)[:3]
     best_sizes_text = ', '.join([f"{size} ({qty} units)" for size, qty in top_sizes]) if top_sizes else ''
@@ -516,92 +541,62 @@ if not payout_cycle_selected:
 
 st.divider()
 
-# Sales file upload
-st.subheader("📈 Sales Sheet")
-sales_file = st.file_uploader(
-    "Upload Sales Excel File",
-    type=['xlsx', 'xls'],
-    key='sales',
-    help="Upload sales data to detect brands"
-)
+# File uploads in columns
+col1, col2, col3 = st.columns(3)
 
-# Brand settings (show after sales upload)
-brand_settings_dict = {}
+with col1:
+    st. subheader("📈 Sales")
+    sales_file = st.file_uploader(
+        "Upload Sales Excel",
+        type=['xlsx', 'xls'],
+        key='sales',
+        help="Sales data file"
+    )
 
-if sales_file:
-    try:
-        # Read and process sales file
-        sales_df_temp = pd.read_excel(sales_file)
-        sales_df_temp. columns = sales_df_temp. columns.str.strip()
-        sales_df_temp = clean_brand_names(sales_df_temp)
-        sales_df_temp = sales_df_temp.dropna(how='all')
-        sales_df_temp, _, _ = remove_refunds_and_original_sales(sales_df_temp)
-        
-        brands = sales_df_temp['brand'].dropna().unique()
-        
-        st.success(f"✅ Found {len(brands)} brand(s) in Sales data")
-        
-        st.divider()
-        st.subheader("📊 Brand Settings")
-        st.markdown("Enter deal percentage and/or rent amount for each brand:")
-        st.info("💡 **Tip:** Leave at 0 if not applicable.  You can set percentage only, rent only, or both.")
-        
-        # Create form for each brand
-        for brand in sorted(brands):
-            with st.expander(f"🏷️ **{brand}**", expanded=True):
-                col1, col2 = st. columns(2)
-                
-                with col1:
-                    deal_percentage = st.number_input(
-                        "Deal Percentage (%)",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=0.0,
-                        step=0.5,
-                        key=f"deal_{brand}",
-                        help="Percentage to deduct from total sales (leave 0 if no percentage)"
-                    )
-                
-                with col2:
-                    rent_amount = st.number_input(
-                        "Rent Amount (EGP)",
-                        min_value=0.0,
-                        value=0.0,
-                        step=100.0,
-                        key=f"rent_{brand}",
-                        help="Fixed rent amount to deduct (leave 0 if no rent)"
-                    )
-                
-                # Show preview of brand deal text
-                preview_text = get_brand_deal_text(deal_percentage, rent_amount)
-                if preview_text:
-                    st.caption(f"📝 Brand Deal will show: **{preview_text}**")
-                else:
-                    st.caption("📝 No deal configured for this brand")
-                
-                brand_settings_dict[brand] = {
-                    'deal_percentage': deal_percentage,
-                    'rent_amount': rent_amount
-                }
-        
-    except Exception as e:
-        st.error(f"❌ Error reading sales file: {str(e)}")
+with col2:
+    st. subheader("📦 Inventory")
+    inventory_file = st.file_uploader(
+        "Upload Inventory Excel",
+        type=['xlsx', 'xls'],
+        key='inventory',
+        help="Inventory data file"
+    )
+
+with col3:
+    st.subheader("💰 Brands Deals")
+    deals_file = st.file_uploader(
+        "Upload Brands Deals Excel",
+        type=['xlsx', 'xls'],
+        key='deals',
+        help="Brand deals configuration file"
+    )
 
 st.divider()
 
-# Inventory file upload
-st.subheader("📦 Inventory Sheet")
-inventory_file = st.file_uploader(
-    "Upload Inventory Excel File",
-    type=['xlsx', 'xls'],
-    key='inventory',
-    help="Upload inventory data"
-)
+# Process brand deals
+brand_settings_dict = {}
+deals_loaded = False
+
+if deals_file:
+    brand_settings_dict, error = load_brand_deals(deals_file)
+    
+    if error:
+        st. error(f"❌ Error reading Brands Deals file: {error}")
+        st.info("ℹ️ **Required format:**\n- Column 1: Brand Name\n- Column 2: Deal Percentage (%)\n- Column 3: Rent Amount (EGP)")
+    else:
+        st.success(f"✅ Loaded deals for {len(brand_settings_dict)} brand(s)")
+        deals_loaded = True
+        
+        # Show preview
+        with st.expander("👀 Preview Loaded Deals"):
+            for brand, settings in sorted(brand_settings_dict.items()):
+                deal_text = get_brand_deal_text(settings['deal_percentage'], settings['rent_amount'])
+                st.write(f"**{brand}:** {deal_text if deal_text else 'No deal'}")
 
 st.divider()
 
 # Generate button
-if payout_cycle_selected and sales_file and inventory_file and len(brand_settings_dict) > 0:
+if payout_cycle_selected and sales_file and inventory_file and deals_loaded:
     if st.button("🚀 Generate Reports", type="primary", use_container_width=True):
         try:
             with st.spinner("Processing files...  Please wait"):
@@ -632,5 +627,5 @@ else:
         st.info("ℹ️ Please upload Sales Excel file")
     elif not inventory_file:
         st.info("ℹ️ Please upload Inventory Excel file")
-    else:
-        st.info("ℹ️ Please fill in brand settings above")
+    elif not deals_loaded:
+        st.info("ℹ️ Please upload Brands Deals Excel file")
