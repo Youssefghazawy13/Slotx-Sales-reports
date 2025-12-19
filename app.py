@@ -32,7 +32,7 @@ def auto_fit_columns(ws):
         ws.column_dimensions[column_letter].width = adjusted_width
 
 def clean_brand_names(df):
-    """Clean brand names:   remove extra spaces and normalize case"""
+    """Clean brand names:  remove extra spaces and normalize case"""
     if 'brand' in df.columns:
         df['brand'] = df['brand'].astype(str).str.strip().str.title()
     return df
@@ -44,9 +44,9 @@ def get_brand_deal_text(deal_percentage, rent_amount):
     
     if has_rent and has_percentage:
         return f"{rent_amount} EGP + {deal_percentage}% Deducted From The Sales"
-    elif has_rent:  
+    elif has_rent: 
         return f"{rent_amount} EGP"
-    elif has_percentage:
+    elif has_percentage: 
         return f"{deal_percentage}% Deducted From The Sales"
     else:
         return ""
@@ -101,7 +101,7 @@ def get_best_selling_size(sales_data):
         
         if '-' in product_name:
             size = product_name.split('-')[-1]. strip()
-            if size:  
+            if size:
                 size_sales[size] = size_sales.get(size, 0) + quantity
     
     if size_sales:
@@ -121,8 +121,8 @@ def get_best_selling_products(sales_data):
         product_name = str(row.get('name_ar', ''))
         quantity = row.get('quantity', 0)
         
-        if product_name:  
-            product_sales[product_name] = product_sales. get(product_name, 0) + quantity
+        if product_name:
+            product_sales[product_name] = product_sales.get(product_name, 0) + quantity
     
     if not product_sales:
         return ''
@@ -150,7 +150,7 @@ def create_sales_details_sheet(wb, brand_name, sales_data):
     
     for _, row in sales_data.iterrows():
         ws.append([
-            row.get('branch_name', ''),
+            row. get('branch_name', ''),
             row.get('brand', ''),
             row.get('name_ar', ''),
             row.get('barcode', ''),
@@ -194,7 +194,7 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     """Create Report sheet for a specific brand"""
     ws = wb.create_sheet(f"{brand_name} Report")
     
-    branch_name = sales_data.iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
+    branch_name = sales_data. iloc[0].get('branch_name', '') if len(sales_data) > 0 else ''
     
     # Calculate totals
     total_inventory_qty = inventory_data.get('available_quantity', pd.Series([0])).sum()
@@ -243,12 +243,180 @@ def create_report_sheet(wb, brand_name, sales_data, inventory_data, payout_cycle
     for row_data in report_data:
         ws.append(row_data)
     
-    for row in ws. iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=1):
         for cell in row:
             if cell.value:
-                cell. font = Font(bold=True)
+                cell.font = Font(bold=True)
     
     auto_fit_columns(ws)
+
+def create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payout_cycle):
+    """Create a summary Excel file for all brands combined"""
+    
+    wb = Workbook()
+    
+    # Add metadata
+    wb.properties.creator = "Slotx Reports Generator"
+    wb.properties.lastModifiedBy = "Slotx Reports Generator"
+    wb. properties.created = datetime.now()
+    wb.properties.modified = datetime.now()
+    
+    # Remove default sheet
+    if 'Sheet' in wb.sheetnames:
+        wb.remove(wb['Sheet'])
+    
+    # Sheet 1: All Sales Details
+    ws_sales = wb. create_sheet("All Sales Details")
+    headers_sales = ['Branch Name', 'Brand Name', 'Product Name', 'Barcode', 'Quantity', 'Price']
+    ws_sales.append(headers_sales)
+    
+    for cell in ws_sales[1]:
+        cell.font = Font(bold=True)
+    
+    total_sales_qty = 0
+    total_sales_money = 0
+    
+    for _, row in sales_df.iterrows():
+        ws_sales.append([
+            row.get('branch_name', ''),
+            row.get('brand', ''),
+            row.get('name_ar', ''),
+            row.get('barcode', ''),
+            row.get('quantity', 0),
+            row.get('total', 0)
+        ])
+        total_sales_qty += row.get('quantity', 0)
+        total_sales_money += row.get('total', 0)
+    
+    # Add totals
+    ws_sales. append(['', '', '', '', f'Total={total_sales_qty}', f'Total={total_sales_money}'])
+    for cell in ws_sales[ws_sales.max_row]: 
+        cell.font = Font(bold=True)
+    
+    auto_fit_columns(ws_sales)
+    
+    # Sheet 2: All Inventory
+    ws_inventory = wb.create_sheet("All Inventory")
+    headers_inventory = ['Branch Name', 'Brand', 'Product Name', 'Barcodes', 'Product Price', 'Available Quantity']
+    ws_inventory.append(headers_inventory)
+    
+    for cell in ws_inventory[1]:
+        cell.font = Font(bold=True)
+    
+    total_inventory_qty = 0
+    total_inventory_value = 0
+    
+    for _, row in inventory_df.iterrows():
+        qty = row.get('available_quantity', 0)
+        price = row.get('sale_price', 0)
+        ws_inventory.append([
+            row.get('branch_name', ''),
+            row.get('brand', ''),
+            row.get('name_en', ''),
+            row.get('barcodes', ''),
+            price,
+            qty
+        ])
+        total_inventory_qty += qty
+        total_inventory_value += qty * price
+    
+    auto_fit_columns(ws_inventory)
+    
+    # Sheet 3: Brands Deals
+    ws_deals = wb. create_sheet("Brands Deals")
+    headers_deals = ['Brand Name', 'Deal Percentage (%)', 'Rent Amount (EGP)', 'Brand Deal']
+    ws_deals.append(headers_deals)
+    
+    for cell in ws_deals[1]:
+        cell.font = Font(bold=True)
+    
+    for brand in sorted(brand_settings_dict.keys()):
+        settings = brand_settings_dict[brand]
+        deal_text = get_brand_deal_text(settings['deal_percentage'], settings['rent_amount'])
+        ws_deals.append([
+            brand,
+            settings['deal_percentage'],
+            settings['rent_amount'],
+            deal_text
+        ])
+    
+    auto_fit_columns(ws_deals)
+    
+    # Sheet 4: Summary Report
+    ws_report = wb. create_sheet("Summary Report")
+    
+    # Calculate best selling sizes (top 3)
+    size_sales = {}
+    for _, row in sales_df.iterrows():
+        product_name = str(row.get('name_ar', ''))
+        quantity = row.get('quantity', 0)
+        if '-' in product_name:
+            size = product_name.split('-')[-1].strip()
+            if size:
+                size_sales[size] = size_sales. get(size, 0) + quantity
+    
+    top_sizes = sorted(size_sales.items(), key=lambda x: x[1], reverse=True)[:3]
+    best_sizes_text = ', '.join([f"{size} ({qty} units)" for size, qty in top_sizes]) if top_sizes else ''
+    
+    # Calculate best selling products (top 3)
+    product_sales = {}
+    for _, row in sales_df.iterrows():
+        product_name = str(row.get('name_ar', ''))
+        quantity = row. get('quantity', 0)
+        if product_name:
+            product_sales[product_name] = product_sales.get(product_name, 0) + quantity
+    
+    top_products = sorted(product_sales.items(), key=lambda x: x[1], reverse=True)[:3]
+    best_products_text = ', '.join([f"{prod} ({qty} units)" for prod, qty in top_products]) if top_products else ''
+    
+    # Calculate totals with deductions
+    total_percentage_deducted = 0
+    total_rent_deducted = 0
+    
+    brands = sales_df['brand'].dropna().unique()
+    for brand in brands:
+        brand_sales = sales_df[sales_df['brand'] == brand]
+        brand_total = brand_sales['total'].sum()
+        
+        settings = brand_settings_dict. get(brand, {'deal_percentage': 0, 'rent_amount': 0})
+        
+        percentage_deduction = brand_total * settings['deal_percentage'] / 100
+        rent_deduction = settings['rent_amount']
+        
+        total_percentage_deducted += percentage_deduction
+        total_rent_deducted += rent_deduction
+    
+    total_after_all_deductions = total_sales_money - total_percentage_deducted - total_rent_deducted
+    
+    # Build report
+    report_data = [
+        ['Payout Period:', payout_cycle],
+        ['', ''],
+        ['Total Sales (Money):', total_sales_money],
+        ['Total Sales (Quantities):', total_sales_qty],
+        ['', ''],
+        ['Total Inventory Quantities:', total_inventory_qty],
+        ['Total Inventory Value:', total_inventory_value],
+        ['', ''],
+        ['Best Selling Sizes (Top 3):', best_sizes_text],
+        ['Best Selling Products (Top 3):', best_products_text],
+        ['', ''],
+        ['Total Percentage Deducted (Money):', total_percentage_deducted],
+        ['Total Rent Deducted (Money):', total_rent_deducted],
+        ['Total Sales After All Deductions:', total_after_all_deductions]
+    ]
+    
+    for row_data in report_data: 
+        ws_report.append(row_data)
+    
+    for row in ws_report.iter_rows(min_row=1, max_row=ws_report. max_row, min_col=1, max_col=1):
+        for cell in row: 
+            if cell.value:
+                cell.font = Font(bold=True)
+    
+    auto_fit_columns(ws_report)
+    
+    return wb
 
 def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
     """Process the sales and inventory files and generate brand reports"""
@@ -273,7 +441,8 @@ def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
     zip_buffer = BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for brand in brands:
+        # Create individual brand files
+        for brand in brands: 
             brand_sales = sales_df[sales_df['brand'] == brand]. copy()
             brand_inventory = inventory_df[inventory_df['brand'] == brand].copy()
             
@@ -308,6 +477,18 @@ def process_files(sales_df, inventory_df, payout_cycle, brand_settings_dict):
             
             excel_buffer.close()
             wb.close()
+        
+        # Create All Brands Summary file
+        summary_wb = create_all_brands_summary(sales_df, inventory_df, brand_settings_dict, payout_cycle)
+        summary_buffer = BytesIO()
+        summary_wb.save(summary_buffer)
+        summary_data = summary_buffer.getvalue()
+        
+        # Add summary to ZIP
+        zip_file.writestr("All_Brands_Summary.xlsx", summary_data)
+        
+        summary_buffer.close()
+        summary_wb.close()
     
     zip_buffer.seek(0)
     return zip_buffer
@@ -330,7 +511,7 @@ payout_cycle = st.selectbox(
 # Validate payout cycle selection
 payout_cycle_selected = payout_cycle != "-- Select Payout Cycle --"
 
-if not payout_cycle_selected:  
+if not payout_cycle_selected: 
     st.warning("⚠️ Please select a Payout Cycle to continue")
 
 st.divider()
@@ -363,7 +544,7 @@ if sales_file:
         st.divider()
         st.subheader("📊 Brand Settings")
         st.markdown("Enter deal percentage and/or rent amount for each brand:")
-        st.info("💡 **Tip:** Leave at 0 if not applicable.   You can set percentage only, rent only, or both.")
+        st.info("💡 **Tip:** Leave at 0 if not applicable.  You can set percentage only, rent only, or both.")
         
         # Create form for each brand
         for brand in sorted(brands):
@@ -399,7 +580,7 @@ if sales_file:
                     st.caption("📝 No deal configured for this brand")
                 
                 brand_settings_dict[brand] = {
-                    'deal_percentage':  deal_percentage,
+                    'deal_percentage': deal_percentage,
                     'rent_amount': rent_amount
                 }
         
@@ -431,21 +612,21 @@ if payout_cycle_selected and sales_file and inventory_file and len(brand_setting
                 
                 brands_count = len(brand_settings_dict)
                 
-                st.success(f"✅ Successfully generated reports for {brands_count} brand(s)!")
+                st.success(f"✅ Successfully generated reports for {brands_count} brand(s) + All Brands Summary!")
                 
                 st.download_button(
                     label="📥 Download Brands Reports (ZIP)",
                     data=zip_buffer,
-                    file_name=f"Brands_Reports_{payout_cycle.replace(' ', '_')}.zip",
+                    file_name=f"Brands_Reports_{payout_cycle. replace(' ', '_')}.zip",
                     mime="application/zip",
                     use_container_width=True
                 )
                 
-        except Exception as e: 
+        except Exception as e:
             st.error(f"❌ Error processing files: {str(e)}")
             st.exception(e)
 else:
-    if not payout_cycle_selected: 
+    if not payout_cycle_selected:
         st.info("ℹ️ Please select a Payout Cycle first")
     elif not sales_file:
         st.info("ℹ️ Please upload Sales Excel file")
